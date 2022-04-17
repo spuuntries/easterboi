@@ -59,120 +59,59 @@ client.on("messageCreate", async (message) => {
             },
             {
               name: "eggs",
-              description: "Eggs you have collected",
-              type: "SUB_COMMAND",
-            },
-            {
-              name: "hatch",
-              description: "Exchange 16 eggs to hatch a creature",
-              type: "SUB_COMMAND",
-            },
-            {
-              name: "exchange",
-              description: "Exchange eggs for cookies",
-              type: "SUB_COMMAND",
+              description: "Eggs subcommand",
+              type: "SUB_COMMAND_GROUP",
               options: [
                 {
-                  name: "amount",
-                  description: "Amount of eggs to exchange",
-                  type: "NUMBER",
-                },
-              ],
-            },
-            {
-              name: "give",
-              description: "Give eggs to another user",
-              type: "SUB_COMMAND",
-              options: [
-                {
-                  name: "amount",
-                  description: "Amount of eggs to give",
-                  type: "NUMBER",
+                  name: "hatch",
+                  description: "Exchange 16 eggs to hatch a creature",
+                  type: "SUB_COMMAND",
                 },
                 {
-                  name: "user",
-                  description: "User to give eggs to",
-                  type: "USER",
+                  name: "exchange",
+                  description: "Exchange eggs for cookies",
+                  type: "SUB_COMMAND",
+                  options: [
+                    {
+                      name: "amount",
+                      description: "Amount of eggs to exchange",
+                      type: "NUMBER",
+                    },
+                  ],
                 },
-              ],
-            },
-            {
-              name: "steal",
-              description:
-                "Roll a dice to steal an egg from another user, if it fails your egg will be given to them instead.",
-              type: "SUB_COMMAND",
-              options: [
                 {
-                  name: "user",
-                  description: "User to steal eggs from",
-                  type: "USER",
+                  name: "give",
+                  description: "Give eggs to another user",
+                  type: "SUB_COMMAND",
+                  options: [
+                    {
+                      name: "amount",
+                      description: "Amount of eggs to give",
+                      type: "NUMBER",
+                    },
+                    {
+                      name: "user",
+                      description: "User to give eggs to",
+                      type: "USER",
+                    },
+                  ],
+                },
+                {
+                  name: "steal",
+                  description:
+                    "Roll a dice to steal an egg from another user, if it fails your egg will be given to them instead.",
+                  type: "SUB_COMMAND",
+                  options: [
+                    {
+                      name: "user",
+                      description: "User to steal eggs from",
+                      type: "USER",
+                    },
+                  ],
                 },
               ],
-            },
-          ],
-        }
-      );
-    else
-      await message.guild.commands.create({
-        name: "easter",
-        description: "Easter event command",
-        type: "CHAT_INPUT",
-        options: [
-          {
-            name: "lb",
-            description: "Leaderboard for the event",
-            type: "SUB_COMMAND",
-          },
-          {
-            name: "cooldown",
-            description: "Time until the next eggs can be collected",
-            type: "SUB_COMMAND",
-          },
-          {
-            name: "eggs",
-            description: "Eggs you have collected",
-            type: "SUB_COMMAND_GROUP",
-            options: [
-              {
-                name: "give",
-                description: "Give eggs to another user",
-                type: "SUB_COMMAND",
-                options: [
-                  {
-                    name: "amount",
-                    description: "Amount of eggs to give",
-                    type: "NUMBER",
-                    required: true,
-                  },
-                  {
-                    name: "user",
-                    description: "User to give eggs to",
-                    type: "USER",
-                    required: true,
-                  },
-                ],
-              },
-              {
-                name: "hatch",
-                description: "Exchange 16 eggs to hatch a creature",
-                type: "SUB_COMMAND",
-              },
-              {
-                name: "exchange",
-                description: "Exchange eggs for cookies",
-                type: "SUB_COMMAND",
-                options: [
-                  {
-                    name: "amount",
-                    description: "Amount of eggs to exchange",
-                    type: "NUMBER",
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            name: "creatures",
+            }, {
+		   name: "creatures",
             description: "Creature subcommands",
             type: "SUB_COMMAND_GROUP",
             options: [
@@ -212,68 +151,17 @@ client.on("messageCreate", async (message) => {
                     description: "Name of the creature",
                     type: "STRING",
                     required: true,
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            name: "steal",
-            description:
-              "Roll a dice to steal an egg from another user, if it fails your egg will be given to them instead.",
-            type: "SUB_COMMAND",
-            options: [
-              {
-                name: "user",
-                description: "User to steal eggs from",
-                type: "USER",
-              },
-            ],
-          },
-          {
-            name: "exchange",
-            description: "Exchange eggs for cookies",
-            type: "SUB_COMMAND",
-            options: [
-              {
-                name: "amount",
-                description: "Amount of eggs to exchange",
-                type: "NUMBER",
-              },
-            ],
-          },
-          {
-            name: "give",
-            description: "Give eggs to another user",
-            type: "SUB_COMMAND",
-            options: [
-              {
-                name: "amount",
-                description: "Amount of eggs to give",
-                type: "NUMBER",
-              },
-              {
-                name: "user",
-                description: "User to give eggs to",
-                type: "USER",
-              },
-            ],
-          },
-          {
-            name: "steal",
-            description:
-              "Roll a dice to steal an egg from another user, if it fails your egg will be given to them instead.",
-            type: "SUB_COMMAND",
-            options: [
-              {
-                name: "user",
-                description: "User to steal eggs from",
-                type: "USER",
-              },
-            ],
-          },
-        ],
-      });
+
+		  }
+          ],
+	      },
+		    	    
+	
+        }
+      );
+    else
+      await message.guild.commands.create({
+      })
 
     message.reply({
       content: "Command deployed for this server!",
