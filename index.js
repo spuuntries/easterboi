@@ -131,17 +131,104 @@ client.on("messageCreate", async (message) => {
           {
             name: "eggs",
             description: "Eggs you have collected",
-            type: "SUB_COMMAND",
-          },
-          {
-            name: "hatch",
-            description: "Exchange 16 eggs to hatch a creature",
-            type: "SUB_COMMAND",
+            type: "SUB_COMMAND_GROUP",
+            options: [
+              {
+                name: "give",
+                description: "Give eggs to another user",
+                type: "SUB_COMMAND",
+                options: [
+                  {
+                    name: "amount",
+                    description: "Amount of eggs to give",
+                    type: "NUMBER",
+                    required: true,
+                  },
+                  {
+                    name: "user",
+                    description: "User to give eggs to",
+                    type: "USER",
+                    required: true,
+                  },
+                ],
+              },
+              {
+                name: "hatch",
+                description: "Exchange 16 eggs to hatch a creature",
+                type: "SUB_COMMAND",
+              },
+              {
+                name: "exchange",
+                description: "Exchange eggs for cookies",
+                type: "SUB_COMMAND",
+                options: [
+                  {
+                    name: "amount",
+                    description: "Amount of eggs to exchange",
+                    type: "NUMBER",
+                  },
+                ],
+              },
+            ],
           },
           {
             name: "creatures",
-            description: "Creatures you have hatched",
+            description: "Creature subcommands",
+            type: "SUB_COMMAND_GROUP",
+            options: [
+              {
+                name: "list",
+                description: "List all creatures",
+                type: "SUB_COMMAND",
+                options: [
+                  {
+                    name: "user",
+                    description: "User to list creatures for",
+                    type: "USER",
+                    required: false,
+                  },
+                ],
+              },
+              {
+                name: "info",
+                description: "Get info about a creature",
+                type: "SUB_COMMAND",
+                options: [
+                  {
+                    name: "creature",
+                    description: "Name of the creature",
+                    type: "STRING",
+                    required: true,
+                  },
+                ],
+              },
+              {
+                name: "exchange",
+                description: "Exchange creature for cookies",
+                type: "SUB_COMMAND",
+                options: [
+                  {
+                    name: "creature",
+                    description: "Name of the creature",
+                    type: "STRING",
+                    required: true,
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            name: "steal",
+            description:
+              "Roll a dice to steal an egg from another user, if it fails your egg will be given to them instead.",
             type: "SUB_COMMAND",
+            options: [
+              {
+                name: "user",
+                description: "User to steal eggs from",
+                type: "USER",
+              },
+            ],
           },
           {
             name: "exchange",
@@ -234,7 +321,8 @@ client.on("interactionCreate", async (interaction) => {
           embed: embed,
         });
       } else {
-        // Iterate the list in chunks of 10 and create a new embed for each chunk
+        // Iterate the list in chunks of 10 and create a new embed for each
+        // chunk
         let chunks = [];
         for (let i = 0; i < lb.length; i += 10) {
           let embed = new Discord.MessageEmbed()
@@ -345,19 +433,19 @@ Viewing users ${i + 1}-${i + 10} of ${lb.length}`
       }
 
       if (user.eggs.length == 0) {
-	interaction.reply({
-	  content: "You have no eggs to hatch!",
-	  ephemeral: true,
-	});
-	return;
+        interaction.reply({
+          content: "You have no eggs to hatch!",
+          ephemeral: true,
+        });
+        return;
       }
 
       if (user.eggs.length < 16) {
-	interaction.reply({
-			  content: "You need at least 16 eggs to hatch a creature!",
-			  ephemeral: true,
-			});
-	      			return;
+        interaction.reply({
+          content: "You need at least 16 eggs to hatch a creature!",
+          ephemeral: true,
+        });
+        return;
       }
 
       break;
