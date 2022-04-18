@@ -14,10 +14,12 @@
     "prettier": "^2.6.2"
   },
   "dependencies": {
+    "axios": "^0.26.1",
     "discord.js": "^13.6.0",
     "discordjs-button-embed-pagination": "^4.0.2",
     "dotenv": "^16.0.0",
     "enmap": "^5.9.0",
+    "jsonpath": "^1.1.1",
     "unb-api": "^1.2.3"
   }
 }

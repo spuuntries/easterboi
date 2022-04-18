@@ -110,14 +110,139 @@ client.on("messageCreate", async (message) => {
                   ],
                 },
               ],
-            }, {
-		   name: "creatures",
+            },
+            {
+              name: "creatures",
+              description: "Creature subcommands",
+              type: "SUB_COMMAND_GROUP",
+              options: [
+                {
+                  name: "list",
+                  description: "List your creatures",
+                  type: "SUB_COMMAND",
+                  options: [
+                    {
+                      name: "user",
+                      description: "User to list creatures for",
+                      type: "USER",
+                      required: false,
+                    },
+                  ],
+                },
+                {
+                  name: "info",
+                  description: "Get info about a creature",
+                  type: "SUB_COMMAND",
+                  options: [
+                    {
+                      name: "creature",
+                      description: "Name of the creature",
+                      type: "STRING",
+                      required: true,
+                    },
+                  ],
+                },
+                {
+                  name: "exchange",
+                  description: "Exchange creature for cookies",
+                  type: "SUB_COMMAND",
+                  options: [
+                    {
+                      name: "creature",
+                      description: "Name of the creature",
+                      type: "STRING",
+                      required: true,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        }
+      );
+    else
+      await message.guild.commands.create({
+        name: "easter",
+        description: "Easter event command",
+        type: "CHAT_INPUT",
+        options: [
+          {
+            name: "lb",
+            description: "Leaderboard for the event",
+            type: "SUB_COMMAND",
+          },
+          {
+            name: "cooldown",
+            description: "Time until the next eggs can be collected",
+            type: "SUB_COMMAND",
+          },
+          {
+            name: "eggs",
+            description: "Eggs subcommand",
+            type: "SUB_COMMAND_GROUP",
+            options: [
+              {
+                name: "info",
+                description: "Number of eggs you have",
+                type: "SUB_COMMAND",
+              },
+              {
+                name: "hatch",
+                description: "Exchange 16 eggs to hatch a creature",
+                type: "SUB_COMMAND",
+              },
+              {
+                name: "exchange",
+                description: "Exchange eggs for cookies",
+                type: "SUB_COMMAND",
+                options: [
+                  {
+                    name: "amount",
+                    description: "Amount of eggs to exchange",
+                    type: "NUMBER",
+                  },
+                ],
+              },
+              {
+                name: "give",
+                description: "Give eggs to another user",
+                type: "SUB_COMMAND",
+                options: [
+                  {
+                    name: "amount",
+                    description: "Amount of eggs to give",
+                    type: "NUMBER",
+                  },
+                  {
+                    name: "user",
+                    description: "User to give eggs to",
+                    type: "USER",
+                  },
+                ],
+              },
+              {
+                name: "steal",
+                description:
+                  "Roll a dice to steal an egg from another user, if it fails your egg will be given to them instead.",
+                type: "SUB_COMMAND",
+                options: [
+                  {
+                    name: "user",
+                    description: "User to steal eggs from",
+                    type: "USER",
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            name: "creatures",
             description: "Creature subcommands",
             type: "SUB_COMMAND_GROUP",
             options: [
               {
                 name: "list",
-                description: "List all creatures",
+                description: "List your creatures",
                 type: "SUB_COMMAND",
                 options: [
                   {
@@ -151,17 +276,13 @@ client.on("messageCreate", async (message) => {
                     description: "Name of the creature",
                     type: "STRING",
                     required: true,
-
-		  }
-          ],
-	      },
-		    	    
-	
-        }
-      );
-    else
-      await message.guild.commands.create({
-      })
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
 
     message.reply({
       content: "Command deployed for this server!",
@@ -176,21 +297,24 @@ client.on("interactionCreate", async (interaction) => {
   if (!interaction.isCommand() || !interaction.guildId) return;
   let guild = await client.guilds.fetch(interaction.guildId);
   if (interaction.command.name != "easter") return;
+  let lb = (() => {
+    if (!db.has(`lb_${interaction.guildId}`))
+      db.set(`lb_${interaction.guildId}`, [
+        { user: interaction.user, eggs: [], creatures: [] },
+      ]);
+    return db.get(`lb_${interaction.guildId}`);
+  })();
+
   switch (interaction.option.name) {
     case "lb":
-      let lb = db.get(`lb_${interaction.guildId}`);
-      if (!lb) {
-        db.set(`lb_${interaction.guildId}`, [
-          {
-            user: interaction.author.id,
-            eggs: [],
-            creatures: [],
-          },
-        ]);
-        lb = db.get(`lb_${interaction.guildId}`);
-      }
       // Sort by eggs collected
-      lb.sort((a, b) => b.eggs.length - a.eggs.length);
+      lb.sort((a, b) => {
+        return b.eggs.length - a.eggs.length;
+      });
+      // Sort by creatures hatched
+      lb.sort((a, b) => {
+        return b.creatures.length - a.creatures.length;
+      });
 
       if (lb.length <= 10) {
         let embed = new Discord.MessageEmbed()
@@ -202,7 +326,7 @@ client.on("interactionCreate", async (interaction) => {
         for (let i = 0; i < lb.length; i++) {
           embed.addField(
             `${i + 1}. ${lb[i].user.username}`,
-            `${lb[i].eggs.length} eggs`
+            `${lb[i].eggs.length} eggs collected\n${lb[i].creatures.length} creatures hatched`
           );
         }
         interaction.reply({
@@ -227,7 +351,7 @@ Viewing users ${i + 1}-${i + 10} of ${lb.length}`
             if (j >= lb.length) break;
             embed.addField(
               `${j + 1}. ${lb[j].user.username}`,
-              `${lb[j].eggs.length} eggs`
+              `${lb[j].eggs.length} eggs collected\n${lb[j].creatures.length} creatures hatched`
             );
           }
           chunks.push(embed);
@@ -265,78 +389,31 @@ Viewing users ${i + 1}-${i + 10} of ${lb.length}`
       });
       break;
     case "eggs":
-      let eggs = db.get(`lb_${interaction.guildId}`);
-      if (!eggs) {
-        db.set(`lb_${interaction.guildId}`, [
-          {
-            user: interaction.user,
-            eggs: [],
-            creatures: [],
-          },
-        ]);
-        eggs = db.get(`lb_${interaction.guildId}`);
-      }
-
-      user = eggs.find((u) => u.user.id == interaction.user.id);
+      let user = lb.find((u) => u.user.id == interaction.user.id);
       if (!user) {
-        user = {
-          user: interaction.user,
-          eggs: [],
-          creatures: [],
-        };
-      }
-
-      let embed = new Discord.MessageEmbed()
-        .setTitle("🥚 Eggs")
-        .setDescription(
-          `You have collected **${
-            user.eggs.length ? user.eggs.length : "no"
-          }** eggs.`
-        );
-
-      break;
-    case "hatch":
-      let eggs = db.get(`lb_${interaction.guildId}`);
-      if (!eggs) {
-        db.set(`lb_${interaction.guildId}`, [
-          {
-            user: interaction.user,
-            eggs: [],
-            creatures: [],
-          },
-        ]);
-        eggs = db.get(`lb_${interaction.guildId}`);
-      }
-
-      user = eggs.find((u) => u.user.id == interaction.user.id);
-      if (!user) {
-        db.push(`lb_${interaction.guildId}`, {
-          user: interaction.user,
-          eggs: [],
-          creatures: [],
-        });
-        user = db
-          .get(`lb_${interaction.guildId}`)
-          .find((u) => u.user.id == interaction.user.id);
-      }
-
-      if (user.eggs.length == 0) {
         interaction.reply({
-          content: "You have no eggs to hatch!",
+          content: "You have not collected any eggs yet.",
           ephemeral: true,
         });
         return;
       }
 
-      if (user.eggs.length < 16) {
-        interaction.reply({
-          content: "You need at least 16 eggs to hatch a creature!",
-          ephemeral: true,
-        });
-        return;
-      }
+      if (!interaction.options.getSubcommand(false)) return;
 
+      switch (interaction.options.getSubcommand(false).name) {
+        case "list":
+          let embed = new Discord.MessageEmbed()
+            .setTitle("🥚 Eggs")
+            .setDescription(`You have collected ${user.eggs.length} eggs.`)
+            .setFooter(
+              `You're ranked ${lb.indexOf(user) + 1}/${
+                lb.length
+              } in the leaderboard`
+            );
+          break;
+      }
       break;
+
     case "creatures":
       let creatures = db.get(`lb_${interaction.guildId}`);
       if (!creatures) {
