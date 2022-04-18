@@ -10,13 +10,15 @@ const procenv = process.env,
       "GUILD_MESSAGE_REACTIONS",
     ],
   }),
-  Enmap = require("enmap"),
+  Enmap = require("enmap").default,
   db = new Enmap({ name: "db" }),
   { Pagination } = require("discordjs-button-embed-pagination"),
   unb = (() => {
     const { Client } = require("unb-api");
     return new Client(procenv.UNBTOKEN);
-  })();
+  })(),
+  hatch = require("./utils/hatch.js"),
+  crypto = require("crypto");
 
 function login() {
   client.login(procenv.TOKEN).catch(() => {
@@ -297,13 +299,53 @@ client.on("interactionCreate", async (interaction) => {
   if (!interaction.isCommand() || !interaction.guildId) return;
   let guild = await client.guilds.fetch(interaction.guildId);
   if (interaction.command.name != "easter") return;
+  /**
+   * @type {{
+   *  user: Discord.User,
+   *  eggs: Number[],
+   *  creatures: {
+   *     name: string,
+   *     stats: {
+   *        vit: Number,
+   *        str: Number
+   *     },
+   *     image: string,
+   *     attachments: Any[]
+   *    }[]
+   *  }[]
+   * }
+   */
   let lb = (() => {
-    if (!db.has(`lb_${interaction.guildId}`))
-      db.set(`lb_${interaction.guildId}`, [
-        { user: interaction.user, eggs: [], creatures: [] },
-      ]);
-    return db.get(`lb_${interaction.guildId}`);
-  })();
+      if (!db.has(`lb_${interaction.guildId}`))
+        db.set(`lb_${interaction.guildId}`, [
+          { user: interaction.user, eggs: [], creatures: [] },
+        ]);
+      return db.get(`lb_${interaction.guildId}`);
+    })(),
+    embed = new Discord.MessageEmbed(),
+    /**
+     * @type {{
+     *  user: Discord.User,
+     *  eggs: Number[],
+     *  creatures: {
+     *     name: string,
+     *     stats: {
+     *        vit: Number,
+     *        str: Number
+     *     },
+     *     image: string,
+     *     attachments: Any[]
+     *    }[]
+     *  }
+     * }
+     */
+    user = lb.find((u) => u.user.id == interaction.user.id);
+
+  if (!user) {
+    user = { user: interaction.user, eggs: [], creatures: [] };
+    lb.push(user);
+    db.set(`lb_${interaction.guildId}`, lb);
+  }
 
   switch (interaction.option.name) {
     case "lb":
@@ -317,7 +359,7 @@ client.on("interactionCreate", async (interaction) => {
       });
 
       if (lb.length <= 10) {
-        let embed = new Discord.MessageEmbed()
+        embed
           .setTitle("🥚 Easter Leaderboard")
           .setDescription(
             `There are currently ${lb.length} users in the leaderboard.`
@@ -337,15 +379,15 @@ client.on("interactionCreate", async (interaction) => {
         // chunk
         let chunks = [];
         for (let i = 0; i < lb.length; i += 10) {
-          let embed = new Discord.MessageEmbed()
+          embed
             .setTitle("🥚 Easter Leaderboard")
             .setDescription(
               `There are currently ${lb.length} users in the leaderboard.`
             )
-            .setFooter(
-              `Page ${Math.floor(i / 10) + 1}/${Math.ceil(lb.length / 10)}
-Viewing users ${i + 1}-${i + 10} of ${lb.length}`
-            );
+            .setFooter({
+              text: `Page ${Math.floor(i / 10) + 1}/${Math.ceil(lb.length / 10)}
+Viewing users ${i + 1}-${i + 10} of ${lb.length}`,
+            });
 
           for (let j = i; j < i + 10; j++) {
             if (j >= lb.length) break;
@@ -362,6 +404,7 @@ Viewing users ${i + 1}-${i + 10} of ${lb.length}`
       }
       break;
     case "cooldown":
+      /** @type { Number } */
       let cooldown = db.get(`cooldown_${interaction.guildId}`);
       if (!cooldown) {
         db.set(`cooldown_${interaction.guildId}`, 0);
@@ -389,7 +432,6 @@ Viewing users ${i + 1}-${i + 10} of ${lb.length}`
       });
       break;
     case "eggs":
-      let user = lb.find((u) => u.user.id == interaction.user.id);
       if (!user) {
         interaction.reply({
           content: "You have not collected any eggs yet.",
@@ -401,42 +443,292 @@ Viewing users ${i + 1}-${i + 10} of ${lb.length}`
       if (!interaction.options.getSubcommand(false)) return;
 
       switch (interaction.options.getSubcommand(false).name) {
-        case "list":
-          let embed = new Discord.MessageEmbed()
+        case "info":
+          embed
             .setTitle("🥚 Eggs")
             .setDescription(`You have collected ${user.eggs.length} eggs.`)
-            .setFooter(
-              `You're ranked ${lb.indexOf(user) + 1}/${
+            .addField(
+              `Streak`,
+              `Longest streak: ${
+                user.eggs.reduce(
+                  // Group the timestamps that are within 5 minutes of each other
+                  (acc, cur) => {
+                    if (acc.length === 0) {
+                      acc.push(cur);
+                      return acc;
+                    }
+                    if (acc[acc.length - 1] + 300000 > cur) {
+                      acc.push(cur);
+                      return acc;
+                    }
+                    return acc;
+                  },
+                  []
+                ).length
+              } eggs.`
+            )
+            .setFooter({
+              text: `You're ranked ${lb.indexOf(user) + 1}/${
                 lb.length
-              } in the leaderboard`
-            );
+              } in the leaderboard`,
+            });
+          interaction.reply({
+            embeds: [embed],
+          });
+          break;
+
+        case "hatch":
+          if (user.eggs.length < 16) {
+            interaction.reply({
+              content:
+                "You need to collect at least 16 eggs to hatch a creature.",
+              ephemeral: true,
+            });
+            return;
+          }
+
+          let newCreature;
+
+          try {
+            newCreature = await hatch(user.user.tag);
+          } catch (e) {
+            interaction.reply({
+              content:
+                "An error occurred while trying to hatch a creature.\nPlease try again later.",
+              ephemeral: true,
+            });
+            return;
+          }
+
+          let newUserEggs = user.eggs.slice(0, -16),
+            newUserCreatures = user.creatures.concat(newCreature);
+
+          db.set(`lb_${interaction.guildId}`, [
+            ...lb.map((u) => {
+              if (u.user.id == user.user.id) {
+                return {
+                  user: u.user,
+                  eggs: newUserEggs,
+                  creatures: newUserCreatures,
+                };
+              } else {
+                return u;
+              }
+            }),
+          ]);
+
+          embed
+            .setTitle("🐣 New Creature")
+            .setDescription(
+              `You hatched a new creature: **${newCreature.name}**!
+"${newCreature.description}"`
+            )
+            .addField(
+              "Stats",
+              `HP: ${newCreature.stats.vit}
+Strength: ${newCreature.stats.str}`
+            )
+            .setThumbnail(newCreature.image)
+            .setFooter({
+              text: `You're ranked ${lb.indexOf(user) + 1}/${
+                lb.length
+              } in the leaderboard`,
+            });
+
+          interaction.reply({
+            content: `You hatched a new creature!`,
+            ephemeral: true,
+            embeds: [embed],
+          });
+          break;
+
+        case "exchange":
+          let eggAmount = interaction.options.data
+            .find((s) => s.name == "eggs")
+            .options.find((s) => s.name == "exchange")
+            .options.find((s) => s.name == "amount").value;
+
+          if (eggAmount > user.eggs.length) {
+            interaction.reply({
+              content: `You don't have that many eggs. You only have ${user.eggs.length} eggs.`,
+              ephemeral: true,
+            });
+            return;
+          }
+
+          unb.editUserBalance(
+            interaction.guild.id,
+            user.user.id,
+            2 * eggAmount
+          );
+
+          let nUEggs = user.eggs.slice(0, -eggAmount);
+
+          db.set(`lb_${interaction.guildId}`, [
+            ...lb.map((u) => {
+              if (u.user.id == user.user.id) {
+                return {
+                  user: u.user,
+                  eggs: nUEggs,
+                  creatures: u.creatures,
+                };
+              } else {
+                return u;
+              }
+            }),
+          ]);
+          break;
+
+        case "give":
+          let toGive = interaction.options.data
+            .find((s) => s.name == "eggs")
+            .options.find((s) => s.name == "give")
+            .options.find((s) => s.name == "amount").value;
+
+          /** @type { Discord.User } */
+          let receiver = interaction.options.data
+            .find((s) => s.name == "eggs")
+            .options.find((s) => s.name == "give")
+            .options.find((s) => s.name == "user").user;
+
+          // Check if the user exists in the database
+          if (!lb.find((u) => u.user.id == receiver.id)) {
+            // Create a new user
+            db.set(`lb_${interaction.guildId}`, [
+              ...lb,
+              {
+                user: receiver,
+                eggs: [],
+                creatures: [],
+              },
+            ]);
+          }
+
+          // Check if the user has enough eggs
+          if (toGive > user.eggs.length) {
+            interaction.reply({
+              content: `You don't have that many eggs. You only have ${user.eggs.length} eggs.`,
+              ephemeral: true,
+            });
+            return;
+          }
+
+          // Give the eggs
+          let gUEggs = user.eggs.slice(0, -toGive),
+            rUEggs = receiver.eggs.concat(user.eggs.slice(-toGive));
+
+          db.set(`lb_${interaction.guildId}`, [
+            ...lb.map((u) => {
+              if (u.user.id == user.user.id) {
+                return {
+                  user: u.user,
+                  eggs: gUEggs,
+                  creatures: u.creatures,
+                };
+              } else if (u.user.id == receiver.id) {
+                return {
+                  user: u.user,
+                  eggs: rUEggs,
+                  creatures: u.creatures,
+                };
+              } else {
+                return u;
+              }
+            }),
+          ]);
+
+          interaction.reply({
+            content: `You gave ${toGive} eggs to ${receiver.username}.\nYou now have ${gUEggs.length} eggs.`,
+            ephemeral: true,
+          });
+          break;
+
+        case "steal":
+          let toSteal = interaction.options.data
+            .find((s) => s.name == "eggs")
+            .options.find((s) => s.name == "steal")
+            .options.find((s) => s.name == "amount").value;
+
+          /** @type { Discord.User } */
+          let stealFrom = interaction.options.data
+              .find((s) => s.name == "eggs")
+              .options.find((s) => s.name == "steal")
+              .options.find((s) => s.name == "user").user,
+            stealFromData = lb.find((u) => u.user.id == stealFrom.id);
+
+          // Check if the user exists in the database
+          if (!lb.find((u) => u.user.id == stealFrom.id)) {
+            // Create a new user
+            db.set(`lb_${interaction.guildId}`, [
+              ...lb,
+              {
+                user: stealFrom,
+                eggs: [],
+                creatures: [],
+              },
+            ]);
+
+            interaction.reply({
+              content: `${stealFrom.username} doesn't have any eggs.`,
+              ephemeral: true,
+            });
+            return;
+          }
+
+          // Check if the user has enough eggs
+          if (toSteal > stealFromData.eggs.length) {
+            interaction.reply({
+              content: `${stealFrom.username} doesn't have that many eggs. They only have ${stealFromData.eggs.length} eggs.`,
+              ephemeral: true,
+            });
+            return;
+          }
+
+          // Get random boolean to see who gets the eggs
+          let random = crypto.randomInt(0, 1) == 1;
+
+          // Give the eggs to the user or the other user
+          let sUEggs = random
+              ? user.eggs.concat(stealFromData.eggs.slice(-toSteal))
+              : stealFromData.eggs.slice(-toSteal),
+            rsUEggs = random
+              ? stealFromData.eggs.slice(0, -toSteal)
+              : user.eggs.concat(stealFromData.eggs.slice(-toSteal));
+
+          db.set(`lb_${interaction.guildId}`, [
+            ...lb.map((u) => {
+              if (u.user.id == user.user.id) {
+                return {
+                  user: u.user,
+                  eggs: sUEggs,
+                  creatures: u.creatures,
+                };
+              } else if (u.user.id == stealFrom.id) {
+                return {
+                  user: u.user,
+                  eggs: rsUEggs,
+                  creatures: u.creatures,
+                };
+              } else {
+                return u;
+              }
+            }),
+          ]);
+
+          interaction.reply({
+            content: `You ${
+              random ? "successfully" : "unsuccessfully"
+            } stole ${toSteal} eggs from ${stealFrom.username}.\nYou now have ${
+              sUEggs.length
+            } eggs.`,
+            ephemeral: true,
+          });
           break;
       }
       break;
 
     case "creatures":
-      let creatures = db.get(`lb_${interaction.guildId}`);
-      if (!creatures) {
-        db.set(`lb_${interaction.guildId}`, [
-          {
-            user: interaction.user,
-            eggs: [],
-            creatures: [],
-          },
-        ]);
-        creatures = db.get(`lb_${interaction.guildId}`);
-      }
-
-      user = creatures.find((u) => u.user.id == interaction.user.id);
-      if (!user) {
-        user = {
-          user: interaction.user,
-          eggs: [],
-          creatures: [],
-        };
-      }
-
-      let embed2 = new Discord.MessageEmbed()
+      embed
         .setTitle("🐣 Creatures")
         .setDescription(
           `You have hatched **${
@@ -459,21 +751,24 @@ Viewing users ${i + 1}-${i + 10} of ${lb.length}`
           });
         } else {
           let chunks = [];
-          for (let i = 0; i < user2.creatures.length; i += 10) {
-            let embed = new Discord.MessageEmbed()
+          for (let i = 0; i < user.creatures.length; i += 10) {
+            embed
               .setTitle("🐣 Creatures")
               .setDescription(
-                `You have hatched **${user2.creatures.length}** creatures.`
-              ).setFooter(`Page ${Math.floor(i / 10) + 1}/${Math.ceil(
-              user2.creatures.length / 10
-            )}
-Viewing creatures ${i + 1}-${i + 10} of ${user2.creatures.length}`);
+                `You have hatched **${user.creatures.length}** creatures.`
+              )
+              .setFooter({
+                text: `Page ${Math.floor(i / 10) + 1}/${Math.ceil(
+                  user2.creatures.length / 10
+                )}
+Viewing creatures ${i + 1}-${i + 10} of ${user.creatures.length}`,
+              });
 
             for (let j = i; j < i + 10; j++) {
-              if (j >= user2.creatures.length) break;
+              if (j >= user.creatures.length) break;
               embed.addField(
-                `${j + 1}. ${user2.creatures[j].name}`,
-                `${user2.creatures[j].level} level`
+                `${j + 1}. ${user.creatures[j].name}`,
+                `${user.creatures[j].level} level`
               );
             }
             chunks.push(embed);
