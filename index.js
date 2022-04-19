@@ -728,62 +728,67 @@ Strength: ${newCreature.stats.str}`
       break;
 
     case "creatures":
-      embed
-        .setTitle("🐣 Creatures")
-        .setDescription(
-          `You have hatched **${
-            user.creatures.length ? user.creatures.length : "no"
-          }** creatures.`
-        );
+      switch (
+        interaction.options.data.find((s) => s.name == "creatures").value
+      ) {
+        case "list":
+          embed
+            .setTitle("🐣 Creatures")
+            .setDescription(
+              `You have hatched **${
+                user.creatures.length ? user.creatures.length : "no"
+              }** creatures.`
+            );
 
-      if (user.creatures.length > 0) {
-        if (user.creatures.length <= 10) {
-          let list = "";
-          for (let i = 0; i < user2.creatures.length; i++) {
-            list += `${i + 1}. ${user2.creatures[i].name}\n`;
-          }
-          embed2.addField("Creatures", list);
-          interaction.reply({
-            embeds: [embed2],
-            allowedMentions: {
-              repliedUser: false,
-            },
-          });
-        } else {
-          let chunks = [];
-          for (let i = 0; i < user.creatures.length; i += 10) {
-            embed
-              .setTitle("🐣 Creatures")
-              .setDescription(
-                `You have hatched **${user.creatures.length}** creatures.`
-              )
-              .setFooter({
-                text: `Page ${Math.floor(i / 10) + 1}/${Math.ceil(
-                  user2.creatures.length / 10
-                )}
-Viewing creatures ${i + 1}-${i + 10} of ${user.creatures.length}`,
+          if (user.creatures.length > 0) {
+            if (user.creatures.length <= 10) {
+              let list = "";
+              for (let i = 0; i < user2.creatures.length; i++) {
+                list += `${i + 1}. ${user2.creatures[i].name}\n`;
+              }
+              embed2.addField("Creatures", list);
+              interaction.reply({
+                embeds: [embed2],
+                allowedMentions: {
+                  repliedUser: false,
+                },
               });
+            } else {
+              let chunks = [];
+              for (let i = 0; i < user.creatures.length; i += 10) {
+                embed
+                  .setTitle("🐣 Creatures")
+                  .setDescription(
+                    `You have hatched **${user.creatures.length}** creatures.`
+                  )
+                  .setFooter({
+                    text: `Page ${Math.floor(i / 10) + 1}/${Math.ceil(
+                      user2.creatures.length / 10
+                    )}
+Viewing creatures ${i + 1}-${i + 10} of ${user.creatures.length}`,
+                  });
 
-            for (let j = i; j < i + 10; j++) {
-              if (j >= user.creatures.length) break;
-              embed.addField(
-                `${j + 1}. ${user.creatures[j].name}`,
-                `${user.creatures[j].level} level`
-              );
+                for (let j = i; j < i + 10; j++) {
+                  if (j >= user.creatures.length) break;
+                  embed.addField(
+                    `${j + 1}. ${user.creatures[j].name}`,
+                    `${user.creatures[j].level} level`
+                  );
+                }
+                chunks.push(embed);
+              }
+
+              // Send the chunks as a paginated embed
+              new Pagination(interaction.channel, chunks, "page").paginate();
             }
-            chunks.push(embed);
+          } else {
+            interaction.reply({
+              embeds: [embed2],
+              allowedMentions: {
+                repliedUser: false,
+              },
+            });
           }
-
-          // Send the chunks as a paginated embed
-          new Pagination(interaction.channel, chunks, "page").paginate();
-        }
-      } else {
-        interaction.reply({
-          embeds: [embed2],
-          allowedMentions: {
-            repliedUser: false,
-          },
-        });
       }
       break;
   }
