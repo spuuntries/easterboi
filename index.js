@@ -31,6 +31,209 @@ login();
 
 client.on("ready", () => {
   console.log(`Logged in as ${client.user.tag}!`);
+  // Interval which iterates through the stored collectable eggs in the database
+  setInterval(
+    async () => {
+      let eggDatas = (() => {
+        /**
+         * @type {{
+         *       id: string,
+         *       timestamp: number,
+         *       eggs: Discord.Message[],
+         *    }[]
+         * }
+         * */
+        let curr = db.get("eggDatas");
+        if (!curr) {
+          curr = [];
+          db.set("eggDatas", curr);
+        }
+        return curr;
+      })();
+
+      // Iterate through the stored eggs
+      for (const eggData of eggDatas) {
+        // Check if it's past 5 mins the stored timestamp,
+        // if so, fetch the messages in eggs array and get all egg reactions by the bot
+        // and remove them
+        if (Date.now() - eggData.timestamp > 300000) {
+          eggData.eggs.forEach(async (egg) => {
+            let fetchedEgg, fetchedReactions, guild;
+            try {
+              fetchedEgg = await egg.fetch();
+            } catch (e) {
+              console.log(`Failed to fetch egg ${egg.id}`);
+            }
+            try {
+              fetchedReactions = fetchedEgg.reactions.cache.filter((reaction) =>
+                reaction.users.cache.has(client.user.id)
+              );
+            } catch (e) {
+              console.log(`Failed to fetch reactions for egg ${egg.id}`);
+            }
+            // Remove the reactions
+            fetchedReactions.forEach(async (reaction) => {
+              try {
+                await reaction.users.remove(client.user.id);
+              } catch (e) {
+                console.log(`Failed to remove reaction ${reaction.id}`);
+              }
+            });
+
+            try {
+              // Fetch the guild
+              guild = await egg.guild.fetch();
+            } catch (e) {
+              console.log(`Failed to fetch guild ${egg.guild.id}`);
+            }
+
+            // Remove the egg from the database
+            eggDatas = eggDatas.map((eggData) => {
+              if (eggData.id === egg.id) {
+                return {
+                  ...eggData,
+                  eggs: eggData.eggs.filter((egg) => egg.id !== egg.id),
+                };
+              } else {
+                return eggData;
+              }
+            });
+            db.set("eggDatas", eggDatas);
+
+            // Get general chat of the guild
+            /** @type { Discord.TextChannel } */
+            let general = (await guild.channels.fetch()).find((c) =>
+              c.name.toLowerCase().includes("general")
+            );
+
+            // Fetch 100 messages from the general chat
+            let messages = await general.messages.fetch({ limit: 100 });
+
+            // Randomly select 5 numbers
+            let random = Array.from(Array(5).keys()).map(() =>
+              crypto.randomInt(0, 100)
+            );
+
+            // React to the messages with the random indexes
+            messages.forEach(async (message, i) => {
+              if (random.includes(i)) {
+                try {
+                  await message.react("🥚");
+                } catch (e) {
+                  console.log(`Failed to react to message ${message.id}`);
+                }
+              }
+
+              // Push the message to the eggData
+              eggData.eggs.push(message);
+            });
+
+            // Set the timestamp to the current time + 5 mins
+            eggData.timestamp = Date.now() + 300000;
+
+            // Set the eggData in the database
+            db.set("eggDatas", eggDatas);
+          });
+        } else {
+          // Set up a reaction collector for the egg
+          eggData.eggs.forEach(async (egg) => {
+            let fetchedEgg;
+            try {
+              fetchedEgg = await egg.fetch();
+            } catch (e) {
+              console.log(`Failed to fetch egg ${egg.id}`);
+              return;
+            }
+
+            try {
+              if (!fetchedEgg.reactions.cache.has("🥚"))
+                await fetchedEgg.react("🥚");
+            } catch (e) {
+              console.log(`Failed to react to egg ${egg.id}`);
+              return;
+            }
+
+            let receivedEmote = await fetchedEgg.awaitReactions({
+              filter: (reaction) =>
+                reaction.users.cache.has(client.user.id) &&
+                reaction.emoji.name == "🥚",
+              max: 1,
+            });
+
+            // If the egg is collected, remove the egg from the database
+            // and remove the reactions, then add the egg to the user's collection
+            await receivedEmote.first().users.remove(client.user.id);
+            await receivedEmote.first().remove();
+
+            eggDatas = eggDatas.map((eggData) => {
+              if (eggData.id === egg.id) {
+                return {
+                  ...eggData,
+                  eggs: eggData.eggs.filter((egg) => egg.id !== egg.id),
+                };
+              } else {
+                return eggData;
+              }
+            });
+
+            db.set("eggDatas", eggDatas);
+
+            /**
+             * @type {{
+             *  user: Discord.User,
+             *  eggs: Number[],
+             *  creatures: {
+             *     name: string,
+             *     stats: {
+             *        vit: Number,
+             *        str: Number
+             *     },
+             *     image: string,
+             *     attachments: Any[]
+             *    }[]
+             *  }[]
+             * }
+             */
+            let lb = (() => {
+              if (!db.has(`lb_${interaction.guildId}`))
+                db.set(`lb_${interaction.guildId}`, [
+                  { user: interaction.user, eggs: [], creatures: [] },
+                ]);
+              return db.get(`lb_${interaction.guildId}`);
+            })();
+
+            // Check if the user is already in the leaderboard
+            if (
+              !lb.find(
+                (user) =>
+                  user.user.id === receivedEmote.first().users.first().id
+              )
+            )
+              db.push(`lb_${interaction.guildId}`, {
+                user: receivedEmote.first().users.first(),
+                eggs: [],
+                creatures: [],
+              });
+
+            // Add the egg to the user's collection
+            lb = lb.map((user) => {
+              if (user.user.id === receivedEmote.first().users.first().id) {
+                return {
+                  ...user,
+                  eggs: [...user.eggs, egg.id],
+                };
+              } else {
+                return user;
+              }
+            });
+
+            db.set(`lb_${interaction.guildId}`, lb);
+          });
+        }
+      }
+    }, // 5 mins
+    300000
+  );
 });
 
 client.on("messageCreate", async (message) => {
@@ -347,7 +550,7 @@ client.on("interactionCreate", async (interaction) => {
     db.set(`lb_${interaction.guildId}`, lb);
   }
 
-  switch (interaction.option.name) {
+  switch (interaction.options.data[0].name) {
     case "lb":
       // Sort by eggs collected
       lb.sort((a, b) => {
@@ -432,18 +635,18 @@ Viewing users ${i + 1}-${i + 10} of ${lb.length}`,
       });
       break;
     case "eggs":
-      if (!user) {
-        interaction.reply({
-          content: "You have not collected any eggs yet.",
-          ephemeral: true,
-        });
-        return;
-      }
-
       if (!interaction.options.getSubcommand(false)) return;
 
-      switch (interaction.options.getSubcommand(false).name) {
+      switch (interaction.options.getSubcommand(false).toLowerCase()) {
         case "info":
+          if (!user) {
+            interaction.reply({
+              content: "You have not collected any eggs yet.",
+              ephemeral: true,
+            });
+            return;
+          }
+
           embed
             .setTitle("🥚 Eggs")
             .setDescription(`You have collected ${user.eggs.length} eggs.`)
@@ -728,9 +931,7 @@ Strength: ${newCreature.stats.str}`
       break;
 
     case "creatures":
-      switch (
-        interaction.options.data.find((s) => s.name == "creatures").value
-      ) {
+      switch (interaction.options.getSubcommand(false).toLowerCase()) {
         case "list":
           embed
             .setTitle("🐣 Creatures")
@@ -743,12 +944,12 @@ Strength: ${newCreature.stats.str}`
           if (user.creatures.length > 0) {
             if (user.creatures.length <= 10) {
               let list = "";
-              for (let i = 0; i < user2.creatures.length; i++) {
-                list += `${i + 1}. ${user2.creatures[i].name}\n`;
+              for (let i = 0; i < user.creatures.length; i++) {
+                list += `${i + 1}. ${user.creatures[i].name}\n`;
               }
-              embed2.addField("Creatures", list);
+              embed.addField("Creatures", list);
               interaction.reply({
-                embeds: [embed2],
+                embeds: [embed],
                 allowedMentions: {
                   repliedUser: false,
                 },
@@ -763,7 +964,7 @@ Strength: ${newCreature.stats.str}`
                   )
                   .setFooter({
                     text: `Page ${Math.floor(i / 10) + 1}/${Math.ceil(
-                      user2.creatures.length / 10
+                      user.creatures.length / 10
                     )}
 Viewing creatures ${i + 1}-${i + 10} of ${user.creatures.length}`,
                   });
